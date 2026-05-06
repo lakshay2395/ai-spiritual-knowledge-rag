@@ -1,5 +1,10 @@
 import os
+import sys
 import pickle
+
+# Add project root to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import faiss
 import numpy as np
 import re
@@ -9,6 +14,8 @@ from rank_bm25 import BM25Okapi
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+
+from src.retrieval.hybrid_retriever import HybridRetriever
 
 class HybridSearchTester:
     def __init__(self, model_name: str = "sentence-transformers/all-MiniLM-L6-v2"):
@@ -168,11 +175,23 @@ if __name__ == "__main__":
         tester.display_results(bible_kw_results, "Bible")
 
         print("\n" + "="*50)
-        print("TEST CASE 2: Semantic Search (Gita)")
-        print("Query: 'What is the nature of the soul?'")
+        print("TEST CASE 1: Semantic Search (Bible)")
+        print("Query: 'Melchizedek'")
         print("="*50)
-        gita_v_results = tester.semantic_search("What is the nature of the soul?", "bhagavad_gita")
-        tester.display_results(gita_v_results, "Bhagavad Gita")
+        bible_kw_results = tester.semantic_search("Melchizedek", "bible")
+        tester.display_results(bible_kw_results, "Bible")
+
+        # --- Phase 3 Test Case ---
+        print("\n" + "="*50)
+        print("PHASE 3: Hybrid Retrieval with RRF")
+        print("Query: 'What does the text say about eternal life?'")
+        print("="*50)
+        retriever = HybridRetriever()
+        fused_results = retriever.get_top_k("What does the text say about eternal life?", top_k=5)
+        
+        for i, res in enumerate(fused_results, 1):
+            print(f"{i}. [{res['citation']}] (RRF Score: {res['rrf_score']:.5f})")
+            print(f"   {res['text'][:150]}...\n")
         
     except Exception as e:
         print(f"An error occurred during testing: {e}")
