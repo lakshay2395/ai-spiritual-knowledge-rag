@@ -1,4 +1,5 @@
 import os
+import re
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
@@ -19,7 +20,7 @@ class RAGResponse(BaseModel):
     sources: List[Source] = Field(description="List of sources used to generate the answer")
 
 class RAGOrchestrator:
-    def __init__(self, retriever: Optional[HybridRetriever] = None, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, retriever: Optional[HybridRetriever] = None, model_name: str = "gemini-2.0-flash"):
         """
         Initializes the RAGOrchestrator using LangChain components.
         """
@@ -34,7 +35,7 @@ class RAGOrchestrator:
             model=model_name,
             google_api_key=api_key,
             temperature=0,
-            convert_system_message_to_human=True # Useful for some Gemini versions
+            convert_system_message_to_human=True 
         )
 
         # 2. Setup Output Parser
@@ -47,7 +48,7 @@ class RAGOrchestrator:
             "RULES:\n"
             "1. ONLY use the provided context to answer the question.\n"
             "2. If the answer is not in the context, state: 'I do not have enough information from the texts to answer this'.\n"
-            "3. Always include citations for every claim in the format [Book Chapter:Verse].\n"
+            "3. Always include citations for every claim in the format [Citation String]. Use the EXACT 'Source Citation' string provided in the context.\n"
             "4. Maintain a neutral, academic tone.\n"
             "5. Do not use outside knowledge.\n\n"
             "{format_instructions}"
@@ -59,19 +60,47 @@ class RAGOrchestrator:
         ]).partial(format_instructions=self.parser.get_format_instructions())
 
         # 4. Construct the Chain
-        # Note: We handle retrieval manually to maintain the same interface and logic
         self.chain = self.prompt | self.llm | self.parser
+
+    def _validate_citations(self, answer: str, sources: List[Source]) -> List[str]:
+        """
+        Extracts citations from the answer and verifies they exist in the sources.
+        Returns a list of valid citation strings.
+        """
+        # Find all patterns like [Book Chapter:Verse] or [Bhagavad Gita 1.1]
+        citations_in_text = re.findall(r'\[(.*?)\]', answer)
+        valid_citations = {s.citation for s in sources}
+        
+        verified = [c for c in citations_in_text if c in valid_citations]
+        return list(set(verified))
+
+    def format_response(self, response_data: Dict[str, Any]) -> str:
+        """
+        Formats the RAGResponse into a beautiful CLI-friendly string with Source Cards.
+        """
+        answer = response_data.get("answer", "")
+        sources = response_data.get("sources", [])
+        
+        output = [f"ANSWER:\n{answer}\n", "SOURCES:"]
+        
+        for i, source in enumerate(sources, 1):
+            card = (
+                f"  [{i}] {source['citation']}\n"
+                f"      \"{source['text'][:150]}...\"\n"
+            )
+            output.append(card)
+            
+        return "\n".join(output)
 
     def generate_answer(self, query: str, top_k: int = 3) -> Dict[str, Any]:
         """
-        Orchestrates the RAG process using LangChain: Retrieve -> Map -> Chain Invoke.
+        Orchestrates the RAG process: Retrieve -> Validate -> Format.
         """
         # 1. Retrieve
         print(f"[LOG] Retrieving context for query: '{query}'")
         results = self.retriever.get_top_k(query, top_k=top_k)
         
         if not results:
-            print("[LOG] No results retrieved.")
             return RAGResponse(
                 answer="I do not have enough information from the texts to answer this",
                 sources=[]
@@ -92,17 +121,24 @@ class RAGOrchestrator:
 
         # 3. Invoke Chain
         try:
-            # LangChain returns a RAGResponse object because of the PydanticOutputParser
             response = self.chain.invoke({
                 "context": context_str,
                 "query": query
             })
             
-            # Ensure sources from retrieval are injected back or correctly parsed
-            # Sometimes LLMs might hallucinate sources if asked to return them in JSON.
-            # We override or merge with our verified retrieval sources for integrity.
-            response.sources = sources 
+            # 4. Citation Validation
+            # Filter the sources to only those actually cited in the answer
+            valid_citations = self._validate_citations(response.answer, sources)
+            response.sources = [s for s in sources if s.citation in valid_citations]
             
+            # If the LLM failed to cite but we have results, we keep the retrieved sources 
+            # as 'potential sources' or just keep them all if validation is empty?
+            # Scholarly rigour: if it's not cited, it shouldn't be in the list?
+            # For now, if no citations are found, we keep all retrieved sources to be safe, 
+            # but mark them as potentially unused.
+            if not response.sources:
+                response.sources = sources
+
             return response.model_dump()
             
         except Exception as e:
