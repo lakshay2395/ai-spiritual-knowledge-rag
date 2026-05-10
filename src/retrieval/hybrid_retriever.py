@@ -98,13 +98,36 @@ class HybridRetriever:
         top_n = np.argsort(scores)[::-1][:top_k]
         return [(idx, scores[idx]) for idx in top_n if scores[idx] > 0]
 
+    def _format_citation(self, metadata: Dict[str, Any], source_name: str) -> str:
+        """
+        Generates a consistent citation string based on source metadata.
+        """
+        if source_name == "bible":
+            book = metadata.get("book", "Unknown")
+            chapter = metadata.get("chapter", "?")
+            verse = metadata.get("verse", "?")
+            return f"{book} {chapter}:{verse}"
+        elif source_name == "bhagavad_gita":
+            chapter = metadata.get("chapter", "?")
+            verse = metadata.get("verse", "?")
+            return f"Bhagavad Gita {chapter}.{verse}"
+        else:
+            # Fallback for generic sources
+            book = metadata.get("book", source_name.capitalize())
+            chapter = metadata.get("chapter", "")
+            verse = metadata.get("verse", "")
+            citation = book
+            if chapter: citation += f" {chapter}"
+            if verse: citation += f":{verse}"
+            return citation.strip()
+
     def get_top_k(self, query: str, religion: Optional[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Retrieves top K results using Hybrid Search (Semantic + Keyword) fused with RRF.
         """
         # Determine target sources
         target_sources = [religion] if religion and religion in self.stores else list(self.stores.keys())
-        
+
         if not target_sources:
             print(f"No valid sources found for filter: {religion}")
             return []
@@ -112,14 +135,14 @@ class HybridRetriever:
         # Generate inputs
         query_vector = self.model.encode([query]).astype("float32")
         tokenized_query = self._preprocess(query)
-        
+
         # Run searches in parallel for efficiency
         # We'll collect (source_name, method, results)
         raw_results = []
         with ThreadPoolExecutor() as executor:
             semantic_futures = {executor.submit(self._semantic_search, query_vector, s, top_k * 5): (s, "semantic") for s in target_sources}
             keyword_futures = {executor.submit(self._keyword_search, tokenized_query, s, top_k * 5): (s, "keyword") for s in target_sources}
-            
+
             for future in semantic_futures:
                 source, method = semantic_futures[future]
                 raw_results.append((source, method, future.result()))
@@ -130,7 +153,7 @@ class HybridRetriever:
         # Reciprocal Rank Fusion (RRF)
         # Key: (source_name, doc_index), Value: RRF Score
         rrf_scores = {}
-        
+
         for source, method, results in raw_results:
             for rank, (doc_idx, _) in enumerate(results, 1):
                 key = (source, doc_idx)
@@ -140,27 +163,24 @@ class HybridRetriever:
 
         # Sort by RRF score
         sorted_keys = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
-        
+
         # Build final output list
         fused_results = []
         for (source, doc_idx), score in sorted_keys[:top_k]:
             # Retrieve from correct store (both have same docs, use vector_docs as ref)
             doc = self.stores[source]["vector_docs"][doc_idx]
-            
-            # Format citation
-            meta = doc["metadata"]
-            if "book" in meta:
-                citation = f"{meta['book']} {meta['chapter']}:{meta['verse']}"
-            else:
-                citation = f"Gita {meta['chapter']}.{meta['verse']}"
-                
+
+            # Format citation using the new helper
+            citation = self._format_citation(doc["metadata"], source)
+
             fused_results.append({
                 "text": doc["text"],
                 "citation": citation,
                 "source": source,
                 "rrf_score": score,
-                "metadata": meta
+                "metadata": doc["metadata"]
             })
-            
+
         return fused_results
+
 
