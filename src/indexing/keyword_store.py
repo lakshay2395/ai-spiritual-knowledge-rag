@@ -2,11 +2,13 @@ import json
 import os
 import pickle
 import re
-from typing import List, Dict, Any
-from rank_bm25 import BM25Okapi
+from typing import Any, Dict, List
+
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from rank_bm25 import BM25Okapi
+
 
 class KeywordStoreIndexer:
     def __init__(self):
@@ -14,16 +16,16 @@ class KeywordStoreIndexer:
         Initializes the KeywordStoreIndexer and ensures NLTK resources are available.
         """
         try:
-            nltk.data.find('tokenizers/punkt')
-            nltk.data.find('tokenizers/punkt_tab') 
-            nltk.data.find('corpora/stopwords')
+            nltk.data.find("tokenizers/punkt")
+            nltk.data.find("tokenizers/punkt_tab")
+            nltk.data.find("corpora/stopwords")
         except LookupError:
             print("Downloading NLTK resources...")
-            nltk.download('punkt')
-            nltk.download('punkt_tab')
-            nltk.download('stopwords')
-        
-        self.stop_words = set(stopwords.words('english'))
+            nltk.download("punkt")
+            nltk.download("punkt_tab")
+            nltk.download("stopwords")
+
+        self.stop_words = set(stopwords.words("english"))
         self.bm25 = None
         self.metadata = []
 
@@ -33,11 +35,11 @@ class KeywordStoreIndexer:
         """
         # Lowercase and remove special characters
         text = text.lower()
-        text = re.sub(r'[^a-z0-9\s]', '', text)
-        
+        text = re.sub(r"[^a-z0-9\s]", "", text)
+
         # Tokenize
         tokens = word_tokenize(text)
-        
+
         # Remove stop-words
         tokens = [t for t in tokens if t not in self.stop_words]
         return tokens
@@ -49,7 +51,7 @@ class KeywordStoreIndexer:
         data = []
         if not os.path.exists(directory):
             raise FileNotFoundError(f"Directory {directory} does not exist.")
-        
+
         for filename in sorted(os.listdir(directory)):
             if filename.endswith(".jsonl"):
                 file_path = os.path.join(directory, filename)
@@ -64,11 +66,11 @@ class KeywordStoreIndexer:
         """
         texts = [item["text"] for item in data]
         # Store full document (text + metadata) for retrieval
-        self.documents = data 
-        
+        self.documents = data
+
         print(f"Preprocessing {len(texts)} items for BM25...")
         tokenized_corpus = [self.preprocess(text) for text in texts]
-        
+
         print("Building BM25 index...")
         self.bm25 = BM25Okapi(tokenized_corpus)
         print("BM25 index built successfully.")
@@ -79,21 +81,22 @@ class KeywordStoreIndexer:
         """
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-            
+
         index_path = os.path.join(output_dir, f"{index_name}_bm25.pkl")
         docs_path = os.path.join(output_dir, f"{index_name}_docs.pkl")
-        
+
         with open(index_path, "wb") as f:
             pickle.dump(self.bm25, f)
-            
+
         with open(docs_path, "wb") as f:
             pickle.dump(self.documents, f)
-        
+
         print(f"BM25 index and documents saved to {output_dir}")
+
 
 if __name__ == "__main__":
     indexer = KeywordStoreIndexer()
-    
+
     # Process Bhagavad Gita
     try:
         gita_data = indexer.load_data("data/processed/bhagavad-gita-as-it-is")
@@ -101,7 +104,7 @@ if __name__ == "__main__":
         indexer.save_index("data/indices/keyword", "bhagavad_gita")
     except Exception as e:
         print(f"Error processing Gita: {e}")
-        
+
     # Process Bible
     try:
         bible_data = indexer.load_data("data/processed/mdbible")

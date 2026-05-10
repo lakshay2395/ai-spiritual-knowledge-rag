@@ -1,11 +1,12 @@
-import unittest
 import os
 import sys
+import unittest
 
 # Add project root to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.rag.orchestrator import RAGOrchestrator, Source
+
 
 class TestCitationEngine(unittest.TestCase):
     def setUp(self):
@@ -14,9 +15,21 @@ class TestCitationEngine(unittest.TestCase):
         # We don't need a real LLM for unit testing these methods
         self.orchestrator = RAGOrchestrator(model_name="mock-model")
         self.mock_sources = [
-            Source(text="Text 1", citation="John 3:16", metadata={"book": "John", "chapter": 3, "verse": 16}),
-            Source(text="Text 2", citation="Matthew 5:1", metadata={"book": "Matthew", "chapter": 5, "verse": 1}),
-            Source(text="Text 3", citation="Bhagavad Gita 2.13", metadata={"chapter": 2, "verse": 13})
+            Source(
+                text="Text 1",
+                citation="John 3:16",
+                metadata={"book": "John", "chapter": 3, "verse": 16},
+            ),
+            Source(
+                text="Text 2",
+                citation="Matthew 5:1",
+                metadata={"book": "Matthew", "chapter": 5, "verse": 1},
+            ),
+            Source(
+                text="Text 3",
+                citation="Bhagavad Gita 2.13",
+                metadata={"chapter": 2, "verse": 13},
+            ),
         ]
 
     def test_validate_citations_success(self):
@@ -36,13 +49,14 @@ class TestCitationEngine(unittest.TestCase):
             "answer": "Test answer [John 3:16]",
             "sources": [
                 {"text": "For God so loved...", "citation": "John 3:16", "metadata": {}}
-            ]
+            ],
         }
         formatted = self.orchestrator.format_response(response_data)
         self.assertIn("ANSWER:", formatted)
         self.assertIn("Test answer [John 3:16]", formatted)
         self.assertIn("SOURCES:", formatted)
         self.assertIn("[1] John 3:16", formatted)
+
 
 if __name__ == "__main__":
     unittest.main()
