@@ -10,6 +10,21 @@ from rank_bm25 import BM25Okapi
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from opentelemetry import trace
+import functools
+
+tracer = trace.get_tracer(__name__)
+
+def traced(name=None):
+    """Decorator to wrap a function in an OpenTelemetry span."""
+    def decorator(func):
+        span_name = name or func.__name__
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with tracer.start_as_current_span(span_name):
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 class HybridRetriever:
     def __init__(self, 
@@ -85,20 +100,81 @@ class HybridRetriever:
         tokens = word_tokenize(text)
         return [t for t in tokens if t not in self.stop_words]
 
+    @traced("semantic_search")
     def _semantic_search(self, query_vector: np.ndarray, source_name: str, top_k: int) -> List[Tuple[int, float]]:
         """Internal semantic search."""
+        span = trace.get_current_span()
+        span.set_attribute("source", source_name)
+        span.set_attribute("top_k", top_k)
+        
         index = self.stores[source_name].get("vector_index")
         if index is None: return []
         distances, indices = index.search(query_vector, top_k)
-        return list(zip(indices[0], distances[0]))
+        results = list(zip(indices[0], distances[0]))
+        
+        span.set_attribute("result_count", len(results))
+        return results
 
+    @traced("keyword_search")
     def _keyword_search(self, tokenized_query: List[str], source_name: str, top_k: int) -> List[Tuple[int, float]]:
         """Internal keyword search."""
+        span = trace.get_current_span()
+        span.set_attribute("source", source_name)
+        span.set_attribute("top_k", top_k)
+        
         bm25 = self.stores[source_name].get("bm25")
         if bm25 is None: return []
         scores = bm25.get_scores(tokenized_query)
         top_n = np.argsort(scores)[::-1][:top_k]
-        return [(idx, scores[idx]) for idx in top_n if scores[idx] > 0]
+        results = [(idx, scores[idx]) for idx in top_n if scores[idx] > 0]
+        
+        span.set_attribute("result_count", len(results))
+        return results
+
+    def _generate_candidates(self, query_vector, tokenized_query, target_sources, rerank_candidate_n):
+        """Runs parallel semantic and keyword searches across sources."""
+        raw_results = []
+        with ThreadPoolExecutor() as executor:
+            semantic_futures = {executor.submit(self._semantic_search, query_vector, s, rerank_candidate_n): (s, "semantic") for s in target_sources}
+            keyword_futures = {executor.submit(self._keyword_search, tokenized_query, s, rerank_candidate_n): (s, "keyword") for s in target_sources}
+
+            for future in semantic_futures:
+                source, method = semantic_futures[future]
+                raw_results.append((source, method, future.result()))
+            for future in keyword_futures:
+                source, method = keyword_futures[future]
+                raw_results.append((source, method, future.result()))
+        return raw_results
+
+    def _apply_rrf(self, raw_results) -> Dict[Tuple[str, int], float]:
+        """Fuses results using Reciprocal Rank Fusion."""
+        rrf_scores = {}
+        for source, method, results in raw_results:
+            for rank, (doc_idx, _) in enumerate(results, 1):
+                key = (source, doc_idx)
+                if key not in rrf_scores:
+                    rrf_scores[key] = 0
+                rrf_scores[key] += 1.0 / (self.rrf_k + rank)
+        return rrf_scores
+
+    @traced("rerank")
+    def _rerank_candidates(self, query: str, candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Scores candidates using the Cross-Encoder."""
+        span = trace.get_current_span()
+        span.set_attribute("candidate_count", len(candidates))
+        
+        if not candidates:
+            return []
+            
+        pairs = [(query, c["text"]) for c in candidates]
+        cross_scores = self.cross_encoder.predict(pairs)
+
+        for i, score in enumerate(cross_scores):
+            candidates[i]["rerank_score"] = float(score)
+
+        # Sort by re-ranked score
+        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
+        return candidates
 
     def _format_citation(self, metadata: Dict[str, Any], source_name: str) -> str:
         """
@@ -123,16 +199,21 @@ class HybridRetriever:
             if verse: citation += f":{verse}"
             return citation.strip()
 
+    @traced("retrieve")
     def get_top_k(self, query: str, religion: Optional[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """
         Retrieves top K results using Hybrid Search (Semantic + Keyword) fused with RRF,
         followed by a second-stage Cross-Encoder re-ranking.
         """
+        span = trace.get_current_span()
+        span.set_attribute("query", query)
+        span.set_attribute("religion_filter", religion or "all")
+        span.set_attribute("top_k", top_k)
+
         # Determine target sources
         target_sources = [religion] if religion and religion in self.stores else list(self.stores.keys())
 
         if not target_sources:
-            print(f"No valid sources found for filter: {religion}")
             return []
 
         # Generate inputs
@@ -140,30 +221,9 @@ class HybridRetriever:
         tokenized_query = self._preprocess(query)
 
         # 1. Candidate Generation (Stage 1)
-        # Fetch more candidates for re-ranking (e.g., top_k * 4, min 20)
         rerank_candidate_n = max(top_k * 4, 20)
-        
-        # Run searches in parallel for efficiency
-        raw_results = []
-        with ThreadPoolExecutor() as executor:
-            semantic_futures = {executor.submit(self._semantic_search, query_vector, s, rerank_candidate_n): (s, "semantic") for s in target_sources}
-            keyword_futures = {executor.submit(self._keyword_search, tokenized_query, s, rerank_candidate_n): (s, "keyword") for s in target_sources}
-
-            for future in semantic_futures:
-                source, method = semantic_futures[future]
-                raw_results.append((source, method, future.result()))
-            for future in keyword_futures:
-                source, method = keyword_futures[future]
-                raw_results.append((source, method, future.result()))
-
-        # Reciprocal Rank Fusion (RRF)
-        rrf_scores = {}
-        for source, method, results in raw_results:
-            for rank, (doc_idx, _) in enumerate(results, 1):
-                key = (source, doc_idx)
-                if key not in rrf_scores:
-                    rrf_scores[key] = 0
-                rrf_scores[key] += 1.0 / (self.rrf_k + rank)
+        raw_results = self._generate_candidates(query_vector, tokenized_query, target_sources, rerank_candidate_n)
+        rrf_scores = self._apply_rrf(raw_results)
 
         # Sort by RRF score and pick top N for re-ranking
         sorted_keys = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:rerank_candidate_n]
@@ -183,19 +243,11 @@ class HybridRetriever:
             })
 
         # 2. Re-ranking (Stage 2)
-        # Use Cross-Encoder to re-score candidates against original query
-        pairs = [(query, c["text"]) for c in candidates]
-        cross_scores = self.cross_encoder.predict(pairs)
-
-        for i, score in enumerate(cross_scores):
-            candidates[i]["rerank_score"] = float(score)
-
-        # Sort by re-ranked score
-        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
+        ranked_candidates = self._rerank_candidates(query, candidates)
 
         # Build final output list with citations
         fused_results = []
-        for doc in candidates[:top_k]:
+        for doc in ranked_candidates[:top_k]:
             citation = self._format_citation(doc["metadata"], doc["source"])
             fused_results.append({
                 "text": doc["text"],
@@ -206,6 +258,7 @@ class HybridRetriever:
                 "metadata": doc["metadata"]
             })
 
+        span.set_attribute("final_result_count", len(fused_results))
         return fused_results
 
 

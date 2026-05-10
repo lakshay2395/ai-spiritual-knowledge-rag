@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -50,8 +50,24 @@ def setup_tracing():
         except Exception as e:
             print(f"[ERROR] Failed to setup OpenTelemetry tracing: {e}")
 
+from opentelemetry import trace
+import functools
+
 # Initialize tracing
 setup_tracing()
+
+tracer = trace.get_tracer(__name__)
+
+def traced(name=None):
+    """Decorator to wrap a function in an OpenTelemetry span."""
+    def decorator(func):
+        span_name = name or func.__name__
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with tracer.start_as_current_span(span_name):
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 class Source(BaseModel):
     text: str = Field(description="The actual text content from the spiritual source")
@@ -136,15 +152,22 @@ class RAGOrchestrator:
             
         return "\n".join(output)
 
+    @traced("generate_answer")
     def generate_answer(self, query: str, religion: Optional[str] = None, top_k: int = 3) -> Dict[str, Any]:
         """
         Orchestrates the RAG process: Retrieve -> Validate -> Format.
         """
+        span = trace.get_current_span()
+        span.set_attribute("query", query)
+        span.set_attribute("religion_filter", religion or "all")
+        span.set_attribute("top_k", top_k)
+
         # 1. Retrieve
         print(f"[LOG] Retrieving context for query: '{query}' (Filter: {religion})")
         results = self.retriever.get_top_k(query, religion=religion, top_k=top_k)
         
         if not results:
+            span.set_attribute("status", "no_results")
             return RAGResponse(
                 answer=(
                     "I do not have enough information from the specific indexed texts to answer this accurately. "
@@ -154,17 +177,8 @@ class RAGOrchestrator:
             ).model_dump()
 
         # 2. Format Context and Sources
-        context_blocks = []
-        sources = []
-        for res in results:
-            context_blocks.append(f"Source Citation: {res['citation']}\nText: {res['text']}")
-            sources.append(Source(
-                text=res['text'],
-                citation=res['citation'],
-                metadata=res['metadata']
-            ))
-            
-        context_str = "\n---\n".join(context_blocks)
+        context_str, sources = self._prepare_context(results)
+        span.set_attribute("context_length", len(context_str))
 
         # 3. Invoke Chain
         try:
@@ -174,23 +188,40 @@ class RAGOrchestrator:
             })
             
             # 4. Citation Validation
-            # Filter the sources to only those actually cited in the answer
-            valid_citations = self._validate_citations(response.answer, sources)
-            response.sources = [s for s in sources if s.citation in valid_citations]
+            final_response = self._validate_response(response, sources)
             
-            # If the LLM failed to cite but we have results, we keep the retrieved sources 
-            # as 'potential sources' or just keep them all if validation is empty?
-            # Scholarly rigour: if it's not cited, it shouldn't be in the list?
-            # For now, if no citations are found, we keep all retrieved sources to be safe, 
-            # but mark them as potentially unused.
-            if not response.sources:
-                response.sources = sources
-
-            return response.model_dump()
+            span.set_attribute("status", "success")
+            span.set_attribute("source_count", len(final_response.sources))
+            return final_response.model_dump()
             
         except Exception as e:
             print(f"[ERROR] LangChain execution failed: {e}")
+            span.record_exception(e)
+            span.set_attribute("status", "error")
             return RAGResponse(
                 answer="An error occurred while generating the answer.",
                 sources=sources
             ).model_dump()
+
+    def _prepare_context(self, results: List[Dict[str, Any]]) -> Tuple[str, List[Source]]:
+        """Prepares the context string and Source objects from retrieval results."""
+        context_blocks = []
+        sources = []
+        for res in results:
+            context_blocks.append(f"Source Citation: {res['citation']}\nText: {res['text']}")
+            sources.append(Source(
+                text=res['text'],
+                citation=res['citation'],
+                metadata=res['metadata']
+            ))
+        return "\n---\n".join(context_blocks), sources
+
+    def _validate_response(self, response: RAGResponse, sources: List[Source]) -> RAGResponse:
+        """Validates citations in the response and filters unused sources."""
+        valid_citations = self._validate_citations(response.answer, sources)
+        response.sources = [s for s in sources if s.citation in valid_citations]
+        
+        # If no citations are found, keep all retrieved sources to be safe
+        if not response.sources:
+            response.sources = sources
+        return response
