@@ -9,6 +9,8 @@ from src.rag.orchestrator import RAGOrchestrator, Source
 
 class TestCitationEngine(unittest.TestCase):
     def setUp(self):
+        # Mock GEMINI_API_KEY to avoid validation errors
+        os.environ["GEMINI_API_KEY"] = "mock-key"
         # We don't need a real LLM for unit testing these methods
         self.orchestrator = RAGOrchestrator(model_name="mock-model")
         self.mock_sources = [

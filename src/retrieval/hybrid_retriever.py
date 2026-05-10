@@ -10,6 +10,9 @@ from rank_bm25 import BM25Okapi
 import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
 
 class HybridRetriever:
     def __init__(self, 
@@ -87,18 +90,28 @@ class HybridRetriever:
 
     def _semantic_search(self, query_vector: np.ndarray, source_name: str, top_k: int) -> List[Tuple[int, float]]:
         """Internal semantic search."""
-        index = self.stores[source_name].get("vector_index")
-        if index is None: return []
-        distances, indices = index.search(query_vector, top_k)
-        return list(zip(indices[0], distances[0]))
+        with tracer.start_as_current_span("semantic_search") as span:
+            span.set_attribute("source", source_name)
+            span.set_attribute("top_k", top_k)
+            index = self.stores[source_name].get("vector_index")
+            if index is None: return []
+            distances, indices = index.search(query_vector, top_k)
+            results = list(zip(indices[0], distances[0]))
+            span.set_attribute("result_count", len(results))
+            return results
 
     def _keyword_search(self, tokenized_query: List[str], source_name: str, top_k: int) -> List[Tuple[int, float]]:
         """Internal keyword search."""
-        bm25 = self.stores[source_name].get("bm25")
-        if bm25 is None: return []
-        scores = bm25.get_scores(tokenized_query)
-        top_n = np.argsort(scores)[::-1][:top_k]
-        return [(idx, scores[idx]) for idx in top_n if scores[idx] > 0]
+        with tracer.start_as_current_span("keyword_search") as span:
+            span.set_attribute("source", source_name)
+            span.set_attribute("top_k", top_k)
+            bm25 = self.stores[source_name].get("bm25")
+            if bm25 is None: return []
+            scores = bm25.get_scores(tokenized_query)
+            top_n = np.argsort(scores)[::-1][:top_k]
+            results = [(idx, scores[idx]) for idx in top_n if scores[idx] > 0]
+            span.set_attribute("result_count", len(results))
+            return results
 
     def _format_citation(self, metadata: Dict[str, Any], source_name: str) -> str:
         """
@@ -128,84 +141,92 @@ class HybridRetriever:
         Retrieves top K results using Hybrid Search (Semantic + Keyword) fused with RRF,
         followed by a second-stage Cross-Encoder re-ranking.
         """
-        # Determine target sources
-        target_sources = [religion] if religion and religion in self.stores else list(self.stores.keys())
+        with tracer.start_as_current_span("retrieve") as span:
+            span.set_attribute("query", query)
+            span.set_attribute("religion_filter", religion or "all")
+            span.set_attribute("top_k", top_k)
 
-        if not target_sources:
-            print(f"No valid sources found for filter: {religion}")
-            return []
+            # Determine target sources
+            target_sources = [religion] if religion and religion in self.stores else list(self.stores.keys())
 
-        # Generate inputs
-        query_vector = self.model.encode([query]).astype("float32")
-        tokenized_query = self._preprocess(query)
+            if not target_sources:
+                print(f"No valid sources found for filter: {religion}")
+                return []
 
-        # 1. Candidate Generation (Stage 1)
-        # Fetch more candidates for re-ranking (e.g., top_k * 4, min 20)
-        rerank_candidate_n = max(top_k * 4, 20)
-        
-        # Run searches in parallel for efficiency
-        raw_results = []
-        with ThreadPoolExecutor() as executor:
-            semantic_futures = {executor.submit(self._semantic_search, query_vector, s, rerank_candidate_n): (s, "semantic") for s in target_sources}
-            keyword_futures = {executor.submit(self._keyword_search, tokenized_query, s, rerank_candidate_n): (s, "keyword") for s in target_sources}
+            # Generate inputs
+            query_vector = self.model.encode([query]).astype("float32")
+            tokenized_query = self._preprocess(query)
 
-            for future in semantic_futures:
-                source, method = semantic_futures[future]
-                raw_results.append((source, method, future.result()))
-            for future in keyword_futures:
-                source, method = keyword_futures[future]
-                raw_results.append((source, method, future.result()))
+            # 1. Candidate Generation (Stage 1)
+            # Fetch more candidates for re-ranking (e.g., top_k * 4, min 20)
+            rerank_candidate_n = max(top_k * 4, 20)
+            
+            # Run searches in parallel for efficiency
+            raw_results = []
+            with ThreadPoolExecutor() as executor:
+                semantic_futures = {executor.submit(self._semantic_search, query_vector, s, rerank_candidate_n): (s, "semantic") for s in target_sources}
+                keyword_futures = {executor.submit(self._keyword_search, tokenized_query, s, rerank_candidate_n): (s, "keyword") for s in target_sources}
 
-        # Reciprocal Rank Fusion (RRF)
-        rrf_scores = {}
-        for source, method, results in raw_results:
-            for rank, (doc_idx, _) in enumerate(results, 1):
-                key = (source, doc_idx)
-                if key not in rrf_scores:
-                    rrf_scores[key] = 0
-                rrf_scores[key] += 1.0 / (self.rrf_k + rank)
+                for future in semantic_futures:
+                    source, method = semantic_futures[future]
+                    raw_results.append((source, method, future.result()))
+                for future in keyword_futures:
+                    source, method = keyword_futures[future]
+                    raw_results.append((source, method, future.result()))
 
-        # Sort by RRF score and pick top N for re-ranking
-        sorted_keys = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:rerank_candidate_n]
+            # Reciprocal Rank Fusion (RRF)
+            rrf_scores = {}
+            for source, method, results in raw_results:
+                for rank, (doc_idx, _) in enumerate(results, 1):
+                    key = (source, doc_idx)
+                    if key not in rrf_scores:
+                        rrf_scores[key] = 0
+                    rrf_scores[key] += 1.0 / (self.rrf_k + rank)
 
-        if not sorted_keys:
-            return []
+            # Sort by RRF score and pick top N for re-ranking
+            sorted_keys = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:rerank_candidate_n]
 
-        # Prepare candidates for re-ranking
-        candidates = []
-        for (source, doc_idx), rrf_score in sorted_keys:
-            doc = self.stores[source]["vector_docs"][doc_idx]
-            candidates.append({
-                "text": doc["text"],
-                "source": source,
-                "rrf_score": rrf_score,
-                "metadata": doc["metadata"]
-            })
+            if not sorted_keys:
+                return []
 
-        # 2. Re-ranking (Stage 2)
-        # Use Cross-Encoder to re-score candidates against original query
-        pairs = [(query, c["text"]) for c in candidates]
-        cross_scores = self.cross_encoder.predict(pairs)
+            # Prepare candidates for re-ranking
+            candidates = []
+            for (source, doc_idx), rrf_score in sorted_keys:
+                doc = self.stores[source]["vector_docs"][doc_idx]
+                candidates.append({
+                    "text": doc["text"],
+                    "source": source,
+                    "rrf_score": rrf_score,
+                    "metadata": doc["metadata"]
+                })
 
-        for i, score in enumerate(cross_scores):
-            candidates[i]["rerank_score"] = float(score)
+            # 2. Re-ranking (Stage 2)
+            # Use Cross-Encoder to re-score candidates against original query
+            with tracer.start_as_current_span("rerank") as rerank_span:
+                rerank_span.set_attribute("candidate_count", len(candidates))
+                pairs = [(query, c["text"]) for c in candidates]
+                cross_scores = self.cross_encoder.predict(pairs)
 
-        # Sort by re-ranked score
-        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
+                for i, score in enumerate(cross_scores):
+                    candidates[i]["rerank_score"] = float(score)
 
-        # Build final output list with citations
-        fused_results = []
-        for doc in candidates[:top_k]:
-            citation = self._format_citation(doc["metadata"], doc["source"])
-            fused_results.append({
-                "text": doc["text"],
-                "citation": citation,
-                "source": doc["source"],
-                "rrf_score": doc["rrf_score"],
-                "rerank_score": doc["rerank_score"],
-                "metadata": doc["metadata"]
-            })
+                # Sort by re-ranked score
+                candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
 
-        return fused_results
+            # Build final output list with citations
+            fused_results = []
+            for doc in candidates[:top_k]:
+                citation = self._format_citation(doc["metadata"], doc["source"])
+                fused_results.append({
+                    "text": doc["text"],
+                    "citation": citation,
+                    "source": doc["source"],
+                    "rrf_score": doc["rrf_score"],
+                    "rerank_score": doc["rerank_score"],
+                    "metadata": doc["metadata"]
+                })
+
+            span.set_attribute("final_result_count", len(fused_results))
+            return fused_results
 
 
