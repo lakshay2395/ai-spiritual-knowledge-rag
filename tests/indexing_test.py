@@ -1,8 +1,10 @@
+import json
 import os
 import shutil
 import tempfile
-import json
+
 import pytest
+
 from src.indexing.keyword_store import KeywordStoreIndexer
 from src.indexing.vector_store import VectorStoreIndexer
 

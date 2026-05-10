@@ -28,11 +28,11 @@ def setup_tracing():
     otel_endpoint = os.getenv("PHOENIX_COLLECTOR_HTTP_ENDPOINT")
     if otel_endpoint:
         try:
-            from openinference.instrumentation.langchain import LangChainInstrumentor
+            from openinference.instrumentation.langchain import \
+                LangChainInstrumentor
             from opentelemetry import trace
-            from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-                OTLPSpanExporter,
-            )
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import \
+                OTLPSpanExporter
             from opentelemetry.sdk.resources import Resource
             from opentelemetry.sdk.trace import TracerProvider
             from opentelemetry.sdk.trace.export import SimpleSpanProcessor

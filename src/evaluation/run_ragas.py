@@ -1,22 +1,17 @@
+import argparse
 import json
 import os
-import argparse
+import sys
 
 from datasets import Dataset
 from dotenv import load_dotenv
+from langchain_google_genai import (ChatGoogleGenerativeAI,
+                                    GoogleGenerativeAIEmbeddings)
 from ragas import evaluate
-from ragas.metrics.collections import (
-    AnswerRelevancy,
-    ContextPrecision,
-    ContextRecall,
-    Faithfulness,
-)
-from langchain_google_genai import ChatGoogleGenerativeAI
-from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-
-import sys
+from ragas.llms import LangchainLLMWrapper
+from ragas.metrics.collections import (AnswerRelevancy, ContextPrecision,
+                                       ContextRecall, Faithfulness)
 
 # Add project root to sys.path
 sys.path.append(

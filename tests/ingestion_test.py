@@ -1,10 +1,12 @@
+import json
 import os
 import shutil
 import tempfile
-import json
-import pytest
 from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.ingestion.parse_bible import parse_bible
 from src.ingestion.parse_gita import parse_gita
 

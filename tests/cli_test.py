@@ -1,7 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
 from click.testing import CliRunner
-from src.cli import cli, display_welcome, display_response
-from unittest.mock import patch, MagicMock
+
+from src.cli import cli, display_response, display_welcome
 
 
 def test_display_welcome():
