@@ -7,3 +7,5 @@ tqdm
 langchain
 langchain-google-genai
 pydantic
+rich
+click

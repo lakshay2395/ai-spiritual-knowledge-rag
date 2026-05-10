@@ -20,7 +20,7 @@ class RAGResponse(BaseModel):
     sources: List[Source] = Field(description="List of sources used to generate the answer")
 
 class RAGOrchestrator:
-    def __init__(self, retriever: Optional[HybridRetriever] = None, model_name: str = "gemini-2.0-flash"):
+    def __init__(self, retriever: Optional[HybridRetriever] = None, model_name: str = "gemini-2.5-flash"):
         """
         Initializes the RAGOrchestrator using LangChain components.
         """
@@ -46,11 +46,12 @@ class RAGOrchestrator:
             "You are a scholarly assistant specializing in spiritual texts.\n"
             "Your goal is to provide accurate, neutral answers strictly based on the provided context.\n\n"
             "RULES:\n"
-            "1. ONLY use the provided context to answer the question.\n"
-            "2. If the answer is not in the context, state: 'I do not have enough information from the texts to answer this'.\n"
+            "1. Attempt to answer the question using the provided context.\n"
+            "2. If the answer is not explicitly clear, provide the best possible interpretation based ONLY on the context, but clearly state if the evidence is limited.\n"
             "3. Always include citations for every claim in the format [Citation String]. Use the EXACT 'Source Citation' string provided in the context.\n"
             "4. Maintain a neutral, academic tone.\n"
-            "5. Do not use outside knowledge.\n\n"
+            "5. Do not use outside knowledge.\n"
+            "6. IMPORTANT: If there is any ambiguity or if the information is sparse, include a disclaimer that the interpretation may be limited and suggest the user consult with a religious scholar or spiritual leader for deeper understanding.\n\n"
             "{format_instructions}"
         )
 
@@ -92,17 +93,20 @@ class RAGOrchestrator:
             
         return "\n".join(output)
 
-    def generate_answer(self, query: str, top_k: int = 3) -> Dict[str, Any]:
+    def generate_answer(self, query: str, religion: Optional[str] = None, top_k: int = 3) -> Dict[str, Any]:
         """
         Orchestrates the RAG process: Retrieve -> Validate -> Format.
         """
         # 1. Retrieve
-        print(f"[LOG] Retrieving context for query: '{query}'")
-        results = self.retriever.get_top_k(query, top_k=top_k)
+        print(f"[LOG] Retrieving context for query: '{query}' (Filter: {religion})")
+        results = self.retriever.get_top_k(query, religion=religion, top_k=top_k)
         
         if not results:
             return RAGResponse(
-                answer="I do not have enough information from the texts to answer this",
+                answer=(
+                    "I do not have enough information from the specific indexed texts to answer this accurately. "
+                    "For a more complete understanding, I recommend consulting with a religious scholar or a spiritual leader."
+                ),
                 sources=[]
             ).model_dump()
 
