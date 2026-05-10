@@ -92,13 +92,13 @@ class RAGOrchestrator:
             
         return "\n".join(output)
 
-    def generate_answer(self, query: str, top_k: int = 3) -> Dict[str, Any]:
+    def generate_answer(self, query: str, religion: Optional[str] = None, top_k: int = 3) -> Dict[str, Any]:
         """
         Orchestrates the RAG process: Retrieve -> Validate -> Format.
         """
         # 1. Retrieve
-        print(f"[LOG] Retrieving context for query: '{query}'")
-        results = self.retriever.get_top_k(query, top_k=top_k)
+        print(f"[LOG] Retrieving context for query: '{query}' (Filter: {religion})")
+        results = self.retriever.get_top_k(query, religion=religion, top_k=top_k)
         
         if not results:
             return RAGResponse(
