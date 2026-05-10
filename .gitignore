@@ -4,3 +4,7 @@ data/raw/
 .env
 __pycache__/
 .DS_Store
+COMMANDs.txt
+AI Spiritual Knowledge Engine - PRD + HLD + LLD.txt
+.gemini/
+*.skill
