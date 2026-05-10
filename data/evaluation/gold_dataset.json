@@ -1,0 +1,164 @@
+[
+  {
+    "question": "What is the nature of the soul according to Krishna in the Bhagavad Gita?",
+    "ground_truth": "The soul is unborn, eternal, ever-existing, and primeval. It is not slain when the body is slain. As the embodied soul continuously passes from boyhood to youth to old age, it similarly passes into another body at death.",
+    "contexts": [
+      "As the embodied soul continuously passes, in this body, from boyhood to youth to old age, the soul similarly passes into another body at death. A sober person is not bewildered by such a change.",
+      "For the soul there is neither birth nor death at any time. He has not come into being, does not come into being, and will not come into being. He is unborn, eternal, ever-existing and primeval. He is not slain when the body is slain."
+    ],
+    "citations": ["Bhagavad Gita 2.13", "Bhagavad Gita 2.20"]
+  },
+  {
+    "question": "What is Krishna's advice to Arjuna regarding lamentation for the living and the dead?",
+    "ground_truth": "Krishna advises that those who are wise lament neither for the living nor for the dead. He explains that there was never a time when they did not exist, nor shall they ever cease to be in the future.",
+    "contexts": [
+      "The Supreme Personality of Godhead said: While speaking learned words, you are mourning for what is not worthy of grief. Those who are wise lament neither for the living nor for the dead.",
+      "Never was there a time when I did not exist, nor you, nor all these kings; nor in the future shall any of us cease to be."
+    ],
+    "citations": ["Bhagavad Gita 2.11", "Bhagavad Gita 2.12"]
+  },
+  {
+    "question": "What is the final instruction on surrender given by Krishna in the Bhagavad Gita?",
+    "ground_truth": "Krishna's final instruction is to abandon all varieties of religion and just surrender unto Him. He promises to deliver the surrendered soul from all sinful reactions and tells them not to fear.",
+    "contexts": [
+      "Abandon all varieties of religion and just surrender unto Me. I shall deliver you from all sinful reactions. Do not fear."
+    ],
+    "citations": ["Bhagavad Gita 18.66"]
+  },
+  {
+    "question": "Why does Krishna encourage Arjuna to perform his prescribed duties?",
+    "ground_truth": "Krishna encourages Arjuna to perform his prescribed duty because action is better than inaction. He notes that one cannot even maintain their physical body without work.",
+    "contexts": [
+      "Perform your prescribed duty, for doing so is better than not working. One cannot even maintain one’s physical body without work."
+    ],
+    "citations": ["Bhagavad Gita 3.8"]
+  },
+  {
+    "question": "According to the Bhagavad Gita, what is the result of studying the sacred conversation between Krishna and Arjuna?",
+    "ground_truth": "Krishna declares that he who studies their sacred conversation worships Him by his intelligence.",
+    "contexts": [
+      "And I declare that he who studies this sacred conversation of ours worships Me by his intelligence."
+    ],
+    "citations": ["Bhagavad Gita 18.70"]
+  },
+  {
+    "question": "What are the three modes of material nature that condition the living entity?",
+    "ground_truth": "The three modes of material nature are goodness, passion, and ignorance. When the eternal living entity comes in contact with nature, they become conditioned by these modes.",
+    "contexts": [
+      "Material nature consists of three modes -- goodness, passion and ignorance. When the eternal living entity comes in contact with nature, O mighty-armed Arjuna, he becomes conditioned by these modes."
+    ],
+    "citations": ["Bhagavad Gita 14.5"]
+  },
+  {
+    "question": "How is a person described who is considered 'further advanced' in spiritual understanding?",
+    "ground_truth": "A person is considered further advanced when they regard honest well-wishers, affectionate benefactors, the neutral, mediators, the envious, friends and enemies, the pious and the sinners all with an equal mind.",
+    "contexts": [
+      "A person is considered still further advanced when he regards honest well-wishers, affectionate benefactors, the neutral, mediators, the envious, friends and enemies, the pious and the sinners all with an equal mind."
+    ],
+    "citations": ["Bhagavad Gita 6.9"]
+  },
+  {
+    "question": "What blessing is promised to those who listen to the conversation of the Gita with faith?",
+    "ground_truth": "One who listens with faith and without envy becomes free from sinful reactions and attains the auspicious planets where the pious dwell.",
+    "contexts": [
+      "And one who listens with faith and without envy becomes free from sinful reactions and attains to the auspicious planets where the pious dwell."
+    ],
+    "citations": ["Bhagavad Gita 18.71"]
+  },
+  {
+    "question": "What does Krishna say happens to those who surrender utterly to the Supreme Lord?",
+    "ground_truth": "By surrendering utterly to the Lord, one attains transcendental peace and the supreme and eternal abode by His grace.",
+    "contexts": [
+      "O scion of Bharata, surrender unto Him utterly. By His grace you will attain transcendental peace and the supreme and eternal abode."
+    ],
+    "citations": ["Bhagavad Gita 18.62"]
+  },
+  {
+    "question": "What is the status of someone who neither hates nor desires the fruits of their activities?",
+    "ground_truth": "One who neither hates nor desires the fruits of their activities is known to be always renounced. Such a person is free from all dualities and easily overcomes material bondage.",
+    "contexts": [
+      "One who neither hates nor desires the fruits of his activities is known to be always renounced. Such a person, free from all dualities, easily overcomes material bondage and is completely liberated, O mighty-armed Arjuna."
+    ],
+    "citations": ["Bhagavad Gita 5.3"]
+  },
+  {
+    "question": "What did God create in the beginning according to Genesis?",
+    "ground_truth": "In the beginning, God created the heavens and the earth.",
+    "contexts": [
+      "In the beginning, God created the heavens and the earth."
+    ],
+    "citations": ["Genesis 1:1"]
+  },
+  {
+    "question": "What is the first commandment given in the Book of Exodus?",
+    "ground_truth": "The first commandment given by God is: 'You shall have no other gods before me.'",
+    "contexts": [
+      "You shall have no other gods before me."
+    ],
+    "citations": ["Exodus 20:3"]
+  },
+  {
+    "question": "How is the nature of love described in I Corinthians chapter 13?",
+    "ground_truth": "Love is patient and kind; love does not envy or boast; it is not arrogant.",
+    "contexts": [
+      "Love is patient and kind; love does not envy or boast; it is not arrogant"
+    ],
+    "citations": ["I Corinthians 13:4"]
+  },
+  {
+    "question": "What is the well-known promise regarding belief in God's Son in the Gospel of John?",
+    "ground_truth": "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.",
+    "contexts": [
+      "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life."
+    ],
+    "citations": ["John 3:16"]
+  },
+  {
+    "question": "What is the definition of faith according to the Book of Hebrews?",
+    "ground_truth": "Faith is the assurance of things hoped for, the conviction of things not seen.",
+    "contexts": [
+      "Now faith is the assurance of things hoped for, the conviction of things not seen."
+    ],
+    "citations": ["Hebrews 11:1"]
+  },
+  {
+    "question": "What is the first line of the Lord's Prayer as taught in the Gospel of Matthew?",
+    "ground_truth": "The prayer begins with: 'Our Father in heaven, hallowed be your name.'",
+    "contexts": [
+      "Pray then like this : Our Father in heaven, hallowed be your name."
+    ],
+    "citations": ["Matthew 6:9"]
+  },
+  {
+    "question": "What are the fruits of the Spirit listed in the Book of Galatians?",
+    "ground_truth": "The fruit of the Spirit is love, joy, peace, patience, kindness, goodness, and faithfulness.",
+    "contexts": [
+      "But the fruit of the Spirit is love, joy, peace, patience, kindness, goodness, faithfulness,"
+    ],
+    "citations": ["Galatians 5:22"]
+  },
+  {
+    "question": "What is the first Beatitude given by Jesus in the Sermon on the Mount?",
+    "ground_truth": "The first Beatitude is: 'Blessed are the poor in spirit, for theirs is the kingdom of heaven.'",
+    "contexts": [
+      "Blessed are the poor in spirit, for theirs is the kingdom of heaven."
+    ],
+    "citations": ["Matthew 5:3"]
+  },
+  {
+    "question": "How does the author of Psalm 23 describe their relationship with the Lord?",
+    "ground_truth": "The author describes the Lord as their shepherd, stating: 'The Lord is my shepherd; I shall not want.'",
+    "contexts": [
+      "The Lord Is My Shepherd A Psalm of David. The Lord is my shepherd; I shall not want."
+    ],
+    "citations": ["Psalms 23:1"]
+  },
+  {
+    "question": "What vision of the future is presented in the 21st chapter of Revelation?",
+    "ground_truth": "The vision is of a new heaven and a new earth, for the first heaven and the first earth had passed away.",
+    "contexts": [
+      "Then I saw a new heaven and a new earth, for the first heaven and the first earth had passed away, and the sea was no more."
+    ],
+    "citations": ["Revelation 21:1"]
+  }
+]
