@@ -5,7 +5,7 @@ import numpy as np
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
 import nltk
 from nltk.tokenize import word_tokenize
@@ -16,6 +16,7 @@ class HybridRetriever:
                  vector_dir: str = "data/indices/vector", 
                  keyword_dir: str = "data/indices/keyword",
                  model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+                 cross_encoder_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
                  rrf_k: int = 60):
         """
         Initializes the HybridRetriever by loading indices and models.
@@ -23,6 +24,7 @@ class HybridRetriever:
         print("Initializing HybridRetriever...")
         self.rrf_k = rrf_k
         self.model = SentenceTransformer(model_name)
+        self.cross_encoder = CrossEncoder(cross_encoder_name)
         
         # Resource checking
         try:
@@ -123,7 +125,8 @@ class HybridRetriever:
 
     def get_top_k(self, query: str, religion: Optional[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """
-        Retrieves top K results using Hybrid Search (Semantic + Keyword) fused with RRF.
+        Retrieves top K results using Hybrid Search (Semantic + Keyword) fused with RRF,
+        followed by a second-stage Cross-Encoder re-ranking.
         """
         # Determine target sources
         target_sources = [religion] if religion and religion in self.stores else list(self.stores.keys())
@@ -136,12 +139,15 @@ class HybridRetriever:
         query_vector = self.model.encode([query]).astype("float32")
         tokenized_query = self._preprocess(query)
 
+        # 1. Candidate Generation (Stage 1)
+        # Fetch more candidates for re-ranking (e.g., top_k * 4, min 20)
+        rerank_candidate_n = max(top_k * 4, 20)
+        
         # Run searches in parallel for efficiency
-        # We'll collect (source_name, method, results)
         raw_results = []
         with ThreadPoolExecutor() as executor:
-            semantic_futures = {executor.submit(self._semantic_search, query_vector, s, top_k * 5): (s, "semantic") for s in target_sources}
-            keyword_futures = {executor.submit(self._keyword_search, tokenized_query, s, top_k * 5): (s, "keyword") for s in target_sources}
+            semantic_futures = {executor.submit(self._semantic_search, query_vector, s, rerank_candidate_n): (s, "semantic") for s in target_sources}
+            keyword_futures = {executor.submit(self._keyword_search, tokenized_query, s, rerank_candidate_n): (s, "keyword") for s in target_sources}
 
             for future in semantic_futures:
                 source, method = semantic_futures[future]
@@ -151,9 +157,7 @@ class HybridRetriever:
                 raw_results.append((source, method, future.result()))
 
         # Reciprocal Rank Fusion (RRF)
-        # Key: (source_name, doc_index), Value: RRF Score
         rrf_scores = {}
-
         for source, method, results in raw_results:
             for rank, (doc_idx, _) in enumerate(results, 1):
                 key = (source, doc_idx)
@@ -161,23 +165,44 @@ class HybridRetriever:
                     rrf_scores[key] = 0
                 rrf_scores[key] += 1.0 / (self.rrf_k + rank)
 
-        # Sort by RRF score
-        sorted_keys = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+        # Sort by RRF score and pick top N for re-ranking
+        sorted_keys = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:rerank_candidate_n]
 
-        # Build final output list
-        fused_results = []
-        for (source, doc_idx), score in sorted_keys[:top_k]:
-            # Retrieve from correct store (both have same docs, use vector_docs as ref)
+        if not sorted_keys:
+            return []
+
+        # Prepare candidates for re-ranking
+        candidates = []
+        for (source, doc_idx), rrf_score in sorted_keys:
             doc = self.stores[source]["vector_docs"][doc_idx]
+            candidates.append({
+                "text": doc["text"],
+                "source": source,
+                "rrf_score": rrf_score,
+                "metadata": doc["metadata"]
+            })
 
-            # Format citation using the new helper
-            citation = self._format_citation(doc["metadata"], source)
+        # 2. Re-ranking (Stage 2)
+        # Use Cross-Encoder to re-score candidates against original query
+        pairs = [(query, c["text"]) for c in candidates]
+        cross_scores = self.cross_encoder.predict(pairs)
 
+        for i, score in enumerate(cross_scores):
+            candidates[i]["rerank_score"] = float(score)
+
+        # Sort by re-ranked score
+        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
+
+        # Build final output list with citations
+        fused_results = []
+        for doc in candidates[:top_k]:
+            citation = self._format_citation(doc["metadata"], doc["source"])
             fused_results.append({
                 "text": doc["text"],
                 "citation": citation,
-                "source": source,
-                "rrf_score": score,
+                "source": doc["source"],
+                "rrf_score": doc["rrf_score"],
+                "rerank_score": doc["rerank_score"],
                 "metadata": doc["metadata"]
             })
 
