@@ -19,7 +19,7 @@ class RAGResponse(BaseModel):
     sources: List[Source] = Field(description="List of sources used to generate the answer")
 
 class RAGOrchestrator:
-    def __init__(self, retriever: Optional[HybridRetriever] = None, model_name: str = "gemini-1.5-flash"):
+    def __init__(self, retriever: Optional[HybridRetriever] = None, model_name: str = "gemini-2.5-flash"):
         """
         Initializes the RAGOrchestrator using LangChain components.
         """
