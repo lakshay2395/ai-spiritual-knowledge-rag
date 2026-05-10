@@ -14,3 +14,4 @@ openinference-instrumentation-langchain
 opentelemetry-sdk
 opentelemetry-exporter-otlp
 python-dotenv
+arize-phoenix
