@@ -17,15 +17,21 @@ from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 import sys
+
 # Add project root to sys.path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.append(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 
 from src.rag.orchestrator import RAGOrchestrator
 
 # Load environment variables
 load_dotenv()
 
-def run_evaluation(limit: int = None, output_path: str = "data/evaluation/ragas_report.csv"):
+
+def run_evaluation(
+    limit: int = None, output_path: str = "data/evaluation/ragas_report.csv"
+):
     # 1. Load Gold Dataset
     gold_path = "data/evaluation/gold_dataset.json"
     if not os.path.exists(gold_path):
@@ -41,11 +47,13 @@ def run_evaluation(limit: int = None, output_path: str = "data/evaluation/ragas_
     # Check for API Key
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("CRITICAL ERROR: GEMINI_API_KEY not found. Please set it in your environment or .env file.")
+        print(
+            "CRITICAL ERROR: GEMINI_API_KEY not found. Please set it in your environment or .env file."
+        )
         return
 
     orchestrator = RAGOrchestrator()
-    
+
     evaluation_results = []
 
     print(f"Running evaluation on {len(gold_data)} samples...")
@@ -53,22 +61,24 @@ def run_evaluation(limit: int = None, output_path: str = "data/evaluation/ragas_
     for i, sample in enumerate(gold_data):
         query = sample["question"]
         ground_truth = sample["ground_truth"]
-        
+
         print(f"[{i+1}/{len(gold_data)}] Processing query: '{query[:50]}...'")
-        
+
         # Run RAG pipeline
         try:
             result = orchestrator.generate_answer(query)
-            
+
             answer = result.get("answer", "")
             contexts = [s["text"] for s in result.get("sources", [])]
-            
-            evaluation_results.append({
-                "question": query,
-                "answer": answer,
-                "contexts": contexts,
-                "ground_truth": ground_truth
-            })
+
+            evaluation_results.append(
+                {
+                    "question": query,
+                    "answer": answer,
+                    "contexts": contexts,
+                    "ground_truth": ground_truth,
+                }
+            )
         except Exception as e:
             print(f"  [ERROR] Failed to process query: {e}")
 
@@ -86,15 +96,14 @@ def run_evaluation(limit: int = None, output_path: str = "data/evaluation/ragas_
         google_api_key=api_key,
         temperature=0,
     )
-    
+
     embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001",
-        google_api_key=api_key
+        model="models/embedding-001", google_api_key=api_key
     )
-    
+
     ragas_llm = LangchainLLMWrapper(llm)
     ragas_embeddings = LangchainEmbeddingsWrapper(embeddings)
-    
+
     # Instantiate metrics
     metrics = [
         Faithfulness(),
@@ -102,22 +111,19 @@ def run_evaluation(limit: int = None, output_path: str = "data/evaluation/ragas_
         ContextPrecision(),
         ContextRecall(),
     ]
-    
+
     # 4. Run Evaluation
     print("Computing RAGAS metrics (this may take a while)...")
     try:
         result = evaluate(
-            dataset,
-            metrics=metrics,
-            llm=ragas_llm,
-            embeddings=ragas_embeddings
+            dataset, metrics=metrics, llm=ragas_llm, embeddings=ragas_embeddings
         )
 
         # 5. Save and Print Report
         df = result.to_pandas()
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         df.to_csv(output_path, index=False)
-        
+
         print("\nEvaluation Complete!")
         print(f"Detailed report saved to {output_path}")
         print("\nSummary Metrics:")
@@ -125,10 +131,23 @@ def run_evaluation(limit: int = None, output_path: str = "data/evaluation/ragas_
     except Exception as e:
         print(f"CRITICAL ERROR during RAGAS evaluation: {e}")
 
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run RAGAS evaluation on the spiritual RAG pipeline.")
-    parser.add_argument("--limit", type=int, default=None, help="Limit the number of samples to evaluate.")
-    parser.add_argument("--output", type=str, default="data/evaluation/ragas_report.csv", help="Path to save the evaluation report.")
+    parser = argparse.ArgumentParser(
+        description="Run RAGAS evaluation on the spiritual RAG pipeline."
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit the number of samples to evaluate.",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="data/evaluation/ragas_report.csv",
+        help="Path to save the evaluation report.",
+    )
     args = parser.parse_args()
-    
+
     run_evaluation(limit=args.limit, output_path=args.output)
