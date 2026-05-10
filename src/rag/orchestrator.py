@@ -2,6 +2,7 @@ import os
 import re
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
@@ -9,6 +10,48 @@ from langchain_core.output_parsers import PydanticOutputParser
 from langchain_core.runnables import RunnablePassthrough
 
 from src.retrieval.hybrid_retriever import HybridRetriever
+
+# Load environment variables
+load_dotenv()
+
+def setup_tracing():
+    """
+    Sets up observability using LangSmith and OpenTelemetry (Arize Phoenix).
+    """
+    # 1. LangSmith is handled automatically by LangChain if env vars are set
+    if os.getenv("LANGCHAIN_TRACING_V2") == "true":
+        print("[LOG] LangSmith tracing enabled.")
+
+    # 2. OpenTelemetry / Arize Phoenix setup
+    otel_endpoint = os.getenv("PHOENIX_COLLECTOR_HTTP_ENDPOINT")
+    if otel_endpoint:
+        try:
+            from openinference.instrumentation.langchain import LangChainInstrumentor
+            from opentelemetry import trace
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+            from opentelemetry.sdk.trace import TracerProvider
+            from opentelemetry.sdk.resources import Resource
+            from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
+            resource = Resource(attributes={
+                "service.name": "ai-spiritual-knowledge-rag",
+            })
+            
+            tracer_provider = TracerProvider(resource=resource)
+            exporter = OTLPSpanExporter(endpoint=f"{otel_endpoint}/v1/traces")
+            tracer_provider.add_span_processor(SimpleSpanProcessor(exporter))
+            trace.set_tracer_provider(tracer_provider)
+
+            # Instrument LangChain
+            LangChainInstrumentor().instrument()
+            print(f"[LOG] OpenTelemetry tracing enabled (Endpoint: {otel_endpoint})")
+        except ImportError:
+            print("[WARNING] OpenTelemetry/OpenInference dependencies not found. Skipping OTEL setup.")
+        except Exception as e:
+            print(f"[ERROR] Failed to setup OpenTelemetry tracing: {e}")
+
+# Initialize tracing
+setup_tracing()
 
 class Source(BaseModel):
     text: str = Field(description="The actual text content from the spiritual source")

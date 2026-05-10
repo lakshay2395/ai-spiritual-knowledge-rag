@@ -9,3 +9,8 @@ langchain-google-genai
 pydantic
 rich
 click
+langsmith
+openinference-instrumentation-langchain
+opentelemetry-sdk
+opentelemetry-exporter-otlp
+python-dotenv
