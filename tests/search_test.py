@@ -183,14 +183,14 @@ if __name__ == "__main__":
 
         # --- Phase 3 Test Case ---
         print("\n" + "="*50)
-        print("PHASE 3: Hybrid Retrieval with RRF")
+        print("PHASE 3: Hybrid Retrieval with RRF + Re-ranking")
         print("Query: 'What does the text say about eternal life?'")
         print("="*50)
         retriever = HybridRetriever()
         fused_results = retriever.get_top_k("What does the text say about eternal life?", top_k=5)
         
         for i, res in enumerate(fused_results, 1):
-            print(f"{i}. [{res['citation']}] (RRF Score: {res['rrf_score']:.5f})")
+            print(f"{i}. [{res['citation']}] (RRF: {res['rrf_score']:.5f}, Re-rank: {res['rerank_score']:.4f})")
             print(f"   {res['text'][:150]}...\n")
         
     except Exception as e:
