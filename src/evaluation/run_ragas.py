@@ -25,7 +25,7 @@ load_dotenv()
 
 
 def run_evaluation(
-    limit: int = None, output_path: str = "data/evaluation/ragas_report.csv"
+    limit: int = None, output_path: str = "data/evaluation/ragas_report_optimized.csv"
 ):
     # 1. Load Gold Dataset
     gold_path = "data/evaluation/gold_dataset.json"

@@ -116,7 +116,6 @@ class RAGOrchestrator:
             model=model_name,
             google_api_key=api_key,
             temperature=0,
-            convert_system_message_to_human=True,
         )
 
         # 2. Setup Output Parser
@@ -124,15 +123,16 @@ class RAGOrchestrator:
 
         # 3. Define Prompt Template
         self.system_prompt = (
-            "You are a scholarly assistant specializing in spiritual texts.\n"
-            "Your goal is to provide accurate, neutral answers strictly based on the provided context.\n\n"
-            "RULES:\n"
-            "1. Attempt to answer the question using the provided context.\n"
-            "2. If the answer is not explicitly clear, provide the best possible interpretation based ONLY on the context, but clearly state if the evidence is limited.\n"
-            "3. Always include citations for every claim in the format [Citation String]. Use the EXACT 'Source Citation' string provided in the context.\n"
-            "4. Maintain a neutral, academic tone.\n"
-            "5. Do not use outside knowledge.\n"
-            "6. IMPORTANT: If there is any ambiguity or if the information is sparse, include a disclaimer that the interpretation may be limited and suggest the user consult with a religious scholar or spiritual leader for deeper understanding.\n\n"
+            "You are a highly knowledgeable and scholarly assistant specializing in spiritual and religious texts.\n"
+            "Your goal is to provide accurate, objective, and detailed answers strictly based on the provided context.\n\n"
+            "INSTRUCTIONS:\n"
+            "1. Use the provided context to answer the user's question as comprehensively as possible.\n"
+            "2. If the context contains relevant but not direct information, synthesize the best possible scholarly answer based on those excerpts.\n"
+            "3. If the context is truly insufficient to provide any part of the answer, state what information is missing but still provide any related insights from the context.\n"
+            "4. For every claim, you MUST include a citation using the EXACT 'Source Citation' string provided in the context, formatted as [Citation String].\n"
+            "5. Maintain a neutral, academic tone. Avoid theological bias or preaching.\n"
+            "6. Use ONLY the provided context. Do not use outside knowledge or assumptions.\n"
+            "7. IMPORTANT: You MUST return a valid JSON object matching the format instructions. Do not include any text outside the JSON block.\n\n"
             "{format_instructions}"
         )
 
@@ -143,8 +143,29 @@ class RAGOrchestrator:
             ]
         ).partial(format_instructions=self.parser.get_format_instructions())
 
-        # 4. Construct the Chain
+        # 4. Religion detection mapping
+        self.religion_map = {
+            "gita": "bhagavad_gita",
+            "bhagavad": "bhagavad_gita",
+            "krishna": "bhagavad_gita",
+            "arjuna": "bhagavad_gita",
+            "bible": "bible",
+            "jesus": "bible",
+            "christ": "bible",
+            "gospel": "bible",
+            "testament": "bible",
+        }
+
+        # 5. Construct the Chain
         self.chain = self.prompt | self.llm | self.parser
+
+    def _detect_religion(self, query: str) -> Optional[str]:
+        """Simple heuristic to detect religion from query."""
+        query_lower = query.lower()
+        for keyword, religion in self.religion_map.items():
+            if keyword in query_lower:
+                return religion
+        return None
 
     def _validate_citations(self, answer: str, sources: List[Source]) -> List[str]:
         """
@@ -178,11 +199,17 @@ class RAGOrchestrator:
 
     @traced("generate_answer")
     def generate_answer(
-        self, query: str, religion: Optional[str] = None, top_k: int = 3
+        self, query: str, religion: Optional[str] = None, top_k: int = 10
     ) -> Dict[str, Any]:
         """
         Orchestrates the RAG process: Retrieve -> Validate -> Format.
         """
+        # Auto-detect religion if not provided
+        if not religion:
+            religion = self._detect_religion(query)
+            if religion:
+                print(f"[LOG] Auto-detected religion: {religion}")
+
         span = trace.get_current_span()
         span.set_attribute("query", query)
         span.set_attribute("religion_filter", religion or "all")
@@ -191,6 +218,7 @@ class RAGOrchestrator:
         # 1. Retrieve
         print(f"[LOG] Retrieving context for query: '{query}' (Filter: {religion})")
         results = self.retriever.get_top_k(query, religion=religion, top_k=top_k)
+        print(f"[DEBUG] Raw Retrieval Results: {[r['citation'] for r in results]}")
 
         if not results:
             span.set_attribute("status", "no_results")

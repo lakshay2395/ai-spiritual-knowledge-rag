@@ -239,16 +239,17 @@ class HybridRetriever:
 
     @traced("retrieve")
     def get_top_k(
-        self, query: str, religion: Optional[str] = None, top_k: int = 5
+        self, query: str, religion: Optional[str] = None, top_k: int = 5, window_size: int = 1
     ) -> List[Dict[str, Any]]:
         """
         Retrieves top K results using Hybrid Search (Semantic + Keyword) fused with RRF,
-        followed by a second-stage Cross-Encoder re-ranking.
+        followed by a second-stage Cross-Encoder re-ranking and context windowing.
         """
         span = trace.get_current_span()
         span.set_attribute("query", query)
         span.set_attribute("religion_filter", religion or "all")
         span.set_attribute("top_k", top_k)
+        span.set_attribute("window_size", window_size)
 
         # Determine target sources
         target_sources = (
@@ -265,14 +266,27 @@ class HybridRetriever:
         tokenized_query = self._preprocess(query)
 
         # 1. Candidate Generation (Stage 1)
-        rerank_candidate_n = max(top_k * 4, 20)
+        rerank_candidate_n = 100
         raw_results = self._generate_candidates(
             query_vector, tokenized_query, target_sources, rerank_candidate_n
         )
         rrf_scores = self._apply_rrf(raw_results)
 
         # Sort by RRF score and pick top N for re-ranking
-        sorted_keys = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[
+        # Apply a small boost for citation matches before sorting
+        boosted_rrf = {}
+        query_words = set(tokenized_query)
+        for (source, doc_idx), score in rrf_scores.items():
+            doc = self.stores[source]["vector_docs"][doc_idx]
+            citation = self._format_citation(doc["metadata"], source).lower()
+            
+            boost = 1.0
+            if any(word in citation for word in query_words):
+                boost = 1.2
+            
+            boosted_rrf[(source, doc_idx)] = score * boost
+
+        sorted_keys = sorted(boosted_rrf.items(), key=lambda x: x[1], reverse=True)[
             :rerank_candidate_n
         ]
 
@@ -289,26 +303,44 @@ class HybridRetriever:
                     "source": source,
                     "rrf_score": rrf_score,
                     "metadata": doc["metadata"],
+                    "original_idx": doc_idx,  # Added for windowing
                 }
             )
 
         # 2. Re-ranking (Stage 2)
         ranked_candidates = self._rerank_candidates(query, candidates)
 
-        # Build final output list with citations
+        # 3. Context Windowing (Stage 3)
+        # We take top_k and expand each with neighbors for better context
         fused_results = []
+        seen_keys = set()  # (source, original_idx) to avoid duplicates
+        
         for doc in ranked_candidates[:top_k]:
-            citation = self._format_citation(doc["metadata"], doc["source"])
-            fused_results.append(
-                {
-                    "text": doc["text"],
-                    "citation": citation,
-                    "source": doc["source"],
-                    "rrf_score": doc["rrf_score"],
-                    "rerank_score": doc["rerank_score"],
-                    "metadata": doc["metadata"],
-                }
-            )
+            source = doc["source"]
+            center_idx = doc["original_idx"]
+            
+            # Fetch neighbors
+            for i in range(center_idx - window_size, center_idx + window_size + 1):
+                if i < 0 or i >= len(self.stores[source]["vector_docs"]):
+                    continue
+                
+                key = (source, i)
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                
+                neighbor_doc = self.stores[source]["vector_docs"][i]
+                citation = self._format_citation(neighbor_doc["metadata"], source)
+                fused_results.append(
+                    {
+                        "text": neighbor_doc["text"],
+                        "citation": citation,
+                        "source": source,
+                        "rrf_score": doc["rrf_score"],
+                        "rerank_score": doc["rerank_score"],
+                        "metadata": neighbor_doc["metadata"],
+                    }
+                )
 
         span.set_attribute("final_result_count", len(fused_results))
         return fused_results
