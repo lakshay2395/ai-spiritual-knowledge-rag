@@ -3,15 +3,15 @@ import json
 import os
 import sys
 
-from datasets import Dataset
 from dotenv import load_dotenv
-from langchain_google_genai import (ChatGoogleGenerativeAI,
-                                    GoogleGenerativeAIEmbeddings)
-from ragas import evaluate
+from google import genai
+from ragas import EvaluationDataset, evaluate
+from ragas.llms import llm_factory
 from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.llms import LangchainLLMWrapper
-from ragas.metrics.collections import (AnswerRelevancy, ContextPrecision,
-                                       ContextRecall, Faithfulness)
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from ragas.metrics import (AnswerRelevancy, ContextPrecision,
+                           ContextRecall, Faithfulness, AnswerCorrectness)
+
 
 # Add project root to sys.path
 sys.path.append(
@@ -40,14 +40,14 @@ def run_evaluation(
         gold_data = gold_data[:limit]
 
     # Check for API Key
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
         print(
-            "CRITICAL ERROR: GEMINI_API_KEY not found. Please set it in your environment or .env file."
+            "CRITICAL ERROR: GOOGLE_API_KEY or GEMINI_API_KEY not found. Please set it in your environment or .env file."
         )
         return
 
-    orchestrator = RAGOrchestrator()
+    orchestrator = RAGOrchestrator(model_name="gemini-2.5-flash")
 
     evaluation_results = []
 
@@ -68,10 +68,10 @@ def run_evaluation(
 
             evaluation_results.append(
                 {
-                    "question": query,
-                    "answer": answer,
-                    "contexts": contexts,
-                    "ground_truth": ground_truth,
+                    "user_input": query,
+                    "response": answer,
+                    "retrieved_contexts": contexts,
+                    "reference": ground_truth,
                 }
             )
         except Exception as e:
@@ -81,37 +81,38 @@ def run_evaluation(
         print("No evaluation results were generated. Skipping RAGAS evaluation.")
         return
 
-    # 2. Convert to RAGAS Dataset
-    dataset = Dataset.from_list(evaluation_results)
+    # 2. Convert to RAGAS EvaluationDataset
+    dataset = EvaluationDataset.from_list(evaluation_results)
 
     # 3. Setup RAGAS with Gemini
     print("Setting up RAGAS with Gemini LLM and Embeddings...")
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
-        google_api_key=api_key,
-        temperature=0,
+    client = genai.Client(api_key=api_key)
+    llm = llm_factory("gemini-2.5-flash", provider="google", client=client)
+    # Use LangChain embeddings for better compatibility
+    lc_embeddings = GoogleGenerativeAIEmbeddings(
+        model="models/gemini-embedding-2",
+        google_api_key=api_key
     )
-
-    embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/embedding-001", google_api_key=api_key
-    )
-
-    ragas_llm = LangchainLLMWrapper(llm)
-    ragas_embeddings = LangchainEmbeddingsWrapper(embeddings)
+    embeddings = LangchainEmbeddingsWrapper(lc_embeddings)
 
     # Instantiate metrics
     metrics = [
-        Faithfulness(),
-        AnswerRelevancy(),
-        ContextPrecision(),
-        ContextRecall(),
+        Faithfulness(llm=llm),
+        AnswerRelevancy(llm=llm, embeddings=embeddings),
+        ContextPrecision(llm=llm),
+        ContextRecall(llm=llm),
+        AnswerCorrectness(llm=llm, embeddings=embeddings),
     ]
+
+    for i, m in enumerate(metrics):
+        print(f"Metric {i}: {type(m)}")
+
 
     # 4. Run Evaluation
     print("Computing RAGAS metrics (this may take a while)...")
     try:
         result = evaluate(
-            dataset, metrics=metrics, llm=ragas_llm, embeddings=ragas_embeddings
+            dataset, metrics=metrics
         )
 
         # 5. Save and Print Report
