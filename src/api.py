@@ -4,8 +4,8 @@ from typing import List, Optional
 
 import anyio
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.rag.orchestrator import RAGOrchestrator
