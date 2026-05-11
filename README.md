@@ -60,7 +60,7 @@ Initial evaluations identified "Zero Recall" on specific verses and "Book Blindn
 
 ### 1. Prerequisites
 *   Python 3.11+
-*   Groq API Key (for Llama 3) or OpenAI API Key
+*   Google Gemini API Key (Recommended) or Groq/OpenAI
 
 ### 2. Installation
 ```bash
@@ -70,12 +70,11 @@ pip install -r requirements.txt
 ```
 
 ### 3. Environment Setup
-Create a `.env` file in the root directory:
-```env
-GROQ_API_KEY=your_key_here
-# OR
-OPENAI_API_KEY=your_key_here
+Copy the example environment file and fill in your keys:
+```bash
+cp .env.example .env
 ```
+Open `.env` and provide your `GEMINI_API_KEY`. You can also enable LangSmith for tracing by providing `LANGCHAIN_API_KEY`.
 
 ### 4. Download Assets & Build Indices
 ```bash
@@ -87,7 +86,12 @@ python download_assets.py
 
 ## 🚀 Usage
 
-### 💻 CLI Interface (Recommended)
+### 🎨 Web Interface (New!)
+The easiest way to interact with the engine is via the beautiful web UI:
+1. Start the API server: `python src/api.py`
+2. Open `http://localhost:8000` in your browser.
+
+### 💻 CLI Interface
 Launch the interactive session:
 ```bash
 python src/cli.py ask

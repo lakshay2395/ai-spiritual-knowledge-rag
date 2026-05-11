@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Spiritual Knowledge Engine</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="background-overlay"></div>
+    
+    <div class="container">
+        <header>
+            <h1>🙏 Spiritual Wisdom</h1>
+            <p class="subtitle">Search the Bhagavad Gita and the Holy Bible</p>
+        </header>
+
+        <main>
+            <div class="search-box">
+                <div class="input-wrapper">
+                    <input type="text" id="query-input" placeholder="Ask a spiritual question..." autocomplete="off">
+                    <button id="search-btn">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    </button>
+                </div>
+                <div class="filters">
+                    <label class="radio-container">
+                        <input type="radio" name="religion" value="both" checked>
+                        <span class="checkmark"></span> Both Texts
+                    </label>
+                    <label class="radio-container">
+                        <input type="radio" name="religion" value="bhagavad_gita">
+                        <span class="checkmark"></span> Bhagavad Gita
+                    </label>
+                    <label class="radio-container">
+                        <input type="radio" name="religion" value="bible">
+                        <span class="checkmark"></span> Holy Bible
+                    </label>
+                </div>
+            </div>
+
+            <div id="loading" class="hidden">
+                <div class="spinner"></div>
+                <p>Seeking wisdom from sacred verses...</p>
+            </div>
+
+            <div id="results" class="hidden">
+                <div class="answer-card">
+                    <div id="answer-text"></div>
+                </div>
+                <h3>Sources</h3>
+                <div id="sources-list" class="sources-grid"></div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Built with ❤️ for Spiritual Seekers | Powered by RAG & Gemini</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
