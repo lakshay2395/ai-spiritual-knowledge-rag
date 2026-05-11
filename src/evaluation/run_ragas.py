@@ -5,13 +5,12 @@ import sys
 
 from dotenv import load_dotenv
 from google import genai
-from ragas import EvaluationDataset, evaluate
-from ragas.llms import llm_factory
-from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from ragas.metrics import (AnswerRelevancy, ContextPrecision,
-                           ContextRecall, Faithfulness, AnswerCorrectness)
-
+from ragas import EvaluationDataset, evaluate
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import llm_factory
+from ragas.metrics import (AnswerCorrectness, AnswerRelevancy,
+                           ContextPrecision, ContextRecall, Faithfulness)
 
 # Add project root to sys.path
 sys.path.append(
@@ -90,8 +89,7 @@ def run_evaluation(
     llm = llm_factory("gemini-2.5-flash", provider="google", client=client)
     # Use LangChain embeddings for better compatibility
     lc_embeddings = GoogleGenerativeAIEmbeddings(
-        model="models/gemini-embedding-2",
-        google_api_key=api_key
+        model="models/gemini-embedding-2", google_api_key=api_key
     )
     embeddings = LangchainEmbeddingsWrapper(lc_embeddings)
 
@@ -107,13 +105,10 @@ def run_evaluation(
     for i, m in enumerate(metrics):
         print(f"Metric {i}: {type(m)}")
 
-
     # 4. Run Evaluation
     print("Computing RAGAS metrics (this may take a while)...")
     try:
-        result = evaluate(
-            dataset, metrics=metrics
-        )
+        result = evaluate(dataset, metrics=metrics)
 
         # 5. Save and Print Report
         df = result.to_pandas()

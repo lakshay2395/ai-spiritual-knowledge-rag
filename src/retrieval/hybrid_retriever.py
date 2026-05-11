@@ -239,7 +239,11 @@ class HybridRetriever:
 
     @traced("retrieve")
     def get_top_k(
-        self, query: str, religion: Optional[str] = None, top_k: int = 5, window_size: int = 1
+        self,
+        query: str,
+        religion: Optional[str] = None,
+        top_k: int = 5,
+        window_size: int = 1,
     ) -> List[Dict[str, Any]]:
         """
         Retrieves top K results using Hybrid Search (Semantic + Keyword) fused with RRF,
@@ -279,11 +283,11 @@ class HybridRetriever:
         for (source, doc_idx), score in rrf_scores.items():
             doc = self.stores[source]["vector_docs"][doc_idx]
             citation = self._format_citation(doc["metadata"], source).lower()
-            
+
             boost = 1.0
             if any(word in citation for word in query_words):
                 boost = 1.2
-            
+
             boosted_rrf[(source, doc_idx)] = score * boost
 
         sorted_keys = sorted(boosted_rrf.items(), key=lambda x: x[1], reverse=True)[
@@ -314,21 +318,21 @@ class HybridRetriever:
         # We take top_k and expand each with neighbors for better context
         fused_results = []
         seen_keys = set()  # (source, original_idx) to avoid duplicates
-        
+
         for doc in ranked_candidates[:top_k]:
             source = doc["source"]
             center_idx = doc["original_idx"]
-            
+
             # Fetch neighbors
             for i in range(center_idx - window_size, center_idx + window_size + 1):
                 if i < 0 or i >= len(self.stores[source]["vector_docs"]):
                     continue
-                
+
                 key = (source, i)
                 if key in seen_keys:
                     continue
                 seen_keys.add(key)
-                
+
                 neighbor_doc = self.stores[source]["vector_docs"][i]
                 citation = self._format_citation(neighbor_doc["metadata"], source)
                 fused_results.append(
