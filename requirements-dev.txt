@@ -8,3 +8,5 @@ pytest-cov
 ragas
 datasets
 pandas
+streamlit
+plotly
