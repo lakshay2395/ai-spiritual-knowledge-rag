@@ -19,3 +19,5 @@ ragas
 google-genai
 datasets
 jsonref
+fastapi
+uvicorn

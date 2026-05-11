@@ -10,3 +10,4 @@ datasets
 pandas
 streamlit
 plotly
+httpx
