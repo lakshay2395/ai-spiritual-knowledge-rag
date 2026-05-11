@@ -10,7 +10,23 @@ The SKE is designed to provide verifiable and transparent answers to spiritual q
 
 ---
 
-## 🏗️ System Architecture (HLD/LLD)
+## 🏗️ Planning & Architecture
+
+The SKE is built upon a foundation of rigorous planning and system design. You can find the comprehensive documentation, including the **PRD, High-Level Design (HLD), and Low-Level Design (LLD)**, in this self-prepared document:
+
+👉 **[View PRD + HLD + LLD on Google Docs](https://docs.google.com/document/d/1sLeHwJ3ifO57LzKZOMmGHhV5B0KlbzYYYE44R5Z6SY8/edit?tab=t.0#heading=h.cue5f7r25x3j)**
+
+### 🤖 Autonomous Development Workflow
+This entire project was built using an **agent-driven autonomous workflow**, leveraging the Gemini CLI to execute complex engineering tasks.
+
+**The Process:**
+1.  **Task Creation**: Features and bugs were first drafted as detailed issues on the [GitHub Project Board](https://github.com/users/lakshay2395/projects/1).
+2.  **Autonomous Execution**: The development was performed by calling the **Gemini CLI skill** and passing the specific **GitHub Issue ID**.
+3.  **End-to-End Implementation**: The agent autonomously researched the codebase, implemented the logic, wrote tests, and verified the changes against the project's engineering standards.
+
+---
+
+## 🏗️ System Architecture (HLD/LLD Summary)
 
 The SKE follows a **Modular RAG Architecture** with an integrated **Observability Sidecar**.
 
