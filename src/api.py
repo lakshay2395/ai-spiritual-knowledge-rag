@@ -4,6 +4,8 @@ from typing import List, Optional
 
 import anyio
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from src.rag.orchestrator import RAGOrchestrator
@@ -39,6 +41,15 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Mount static files for the beautiful UI
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
+
+
+@app.get("/")
+async def read_index():
+    """Serves the beautiful UI at the root."""
+    return FileResponse("src/static/index.html")
 
 
 class SourceModel(BaseModel):
