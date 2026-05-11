@@ -5,3 +5,6 @@ isort
 ruff
 pytest-asyncio
 pytest-cov
+ragas
+datasets
+pandas

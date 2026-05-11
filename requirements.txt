@@ -15,3 +15,7 @@ opentelemetry-sdk
 opentelemetry-exporter-otlp
 python-dotenv
 arize-phoenix
+ragas
+google-genai
+datasets
+jsonref
